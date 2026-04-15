@@ -34,8 +34,8 @@ export default function ActiveSessionScreen() {
   useEffect(() => {
     const pulse = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.15, duration: 800, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1.15, duration: 800, useNativeDriver: false }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: false }),
       ]),
     );
     pulse.start();

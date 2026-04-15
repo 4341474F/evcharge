@@ -1,63 +1,129 @@
-import { forwardRef, useCallback } from 'react';
-import GorhomBottomSheet, {
-  BottomSheetView,
-  BottomSheetBackdrop,
-  type BottomSheetBackdropProps,
-} from '@gorhom/bottom-sheet';
-import { StyleSheet } from 'react-native';
+import {
+  useRef,
+  useEffect,
+  forwardRef,
+  useImperativeHandle,
+  type ReactNode,
+} from 'react';
+import {
+  Modal,
+  View,
+  StyleSheet,
+  Animated,
+  TouchableWithoutFeedback,
+  Dimensions,
+  PanResponder,
+} from 'react-native';
 
-interface BottomSheetProps {
-  snapPoints: (string | number)[];
-  children: React.ReactNode;
-  onClose?: () => void;
+const SCREEN_HEIGHT = Dimensions.get('window').height;
+
+export interface BottomSheetHandle {
+  expand: () => void;
+  close: () => void;
 }
 
-const BottomSheet = forwardRef<GorhomBottomSheet, BottomSheetProps>(
-  ({ snapPoints, children, onClose }, ref) => {
-    const renderBackdrop = useCallback(
-      (props: BottomSheetBackdropProps) => (
-        <BottomSheetBackdrop
-          {...props}
-          disappearsOnIndex={-1}
-          appearsOnIndex={0}
-          opacity={0.5}
-        />
-      ),
-      [],
-    );
+interface BottomSheetProps {
+  children: ReactNode;
+  onClose?: () => void;
+  snapPercent?: number; // 0-1, default 0.5
+}
+
+const BottomSheet = forwardRef<BottomSheetHandle, BottomSheetProps>(
+  ({ children, onClose, snapPercent = 0.5 }, ref) => {
+    const sheetHeight = SCREEN_HEIGHT * snapPercent;
+    const translateY = useRef(new Animated.Value(sheetHeight)).current;
+    const visible = useRef(new Animated.Value(0)).current;
+    const isOpen = useRef(false);
+
+    const open = () => {
+      isOpen.current = true;
+      visible.setValue(1);
+      Animated.spring(translateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        damping: 20,
+        stiffness: 180,
+      }).start();
+    };
+
+    const close = () => {
+      Animated.timing(translateY, {
+        toValue: sheetHeight,
+        duration: 250,
+        useNativeDriver: true,
+      }).start(() => {
+        isOpen.current = false;
+        visible.setValue(0);
+        onClose?.();
+      });
+    };
+
+    useImperativeHandle(ref, () => ({ expand: open, close }));
+
+    const panResponder = useRef(
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, g) => g.dy > 5,
+        onPanResponderMove: (_, g) => {
+          if (g.dy > 0) translateY.setValue(g.dy);
+        },
+        onPanResponderRelease: (_, g) => {
+          if (g.dy > sheetHeight * 0.35 || g.vy > 0.5) {
+            close();
+          } else {
+            Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
+          }
+        },
+      }),
+    ).current;
+
+    const opacity = visible.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
 
     return (
-      <GorhomBottomSheet
-        ref={ref}
-        index={-1}
-        snapPoints={snapPoints}
-        enablePanDownToClose
-        onClose={onClose}
-        renderBackdrop={renderBackdrop}
-        backgroundStyle={styles.background}
-        handleIndicatorStyle={styles.indicator}
+      <Animated.View
+        pointerEvents={isOpen.current ? 'auto' : 'none'}
+        style={[StyleSheet.absoluteFill, styles.wrapper, { opacity }]}
       >
-        <BottomSheetView style={styles.content}>{children}</BottomSheetView>
-      </GorhomBottomSheet>
+        <TouchableWithoutFeedback onPress={close}>
+          <View style={styles.backdrop} />
+        </TouchableWithoutFeedback>
+
+        <Animated.View
+          style={[styles.sheet, { height: sheetHeight, transform: [{ translateY }] }]}
+          {...panResponder.panHandlers}
+        >
+          <View style={styles.handle} />
+          {children}
+        </Animated.View>
+      </Animated.View>
     );
   },
 );
 
 BottomSheet.displayName = 'BottomSheet';
+export default BottomSheet;
 
 const styles = StyleSheet.create({
-  background: {
+  wrapper: {
+    zIndex: 999,
+    justifyContent: 'flex-end',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  sheet: {
     backgroundColor: '#1A2332',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+    paddingTop: 12,
+    overflow: 'hidden',
   },
-  indicator: {
-    backgroundColor: '#4B5563',
+  handle: {
     width: 40,
-  },
-  content: {
-    flex: 1,
+    height: 4,
+    backgroundColor: '#4B5563',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 8,
   },
 });
-
-export default BottomSheet;

@@ -1,9 +1,8 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback } from 'react';
 import { View, StyleSheet, Text, ActivityIndicator, TouchableOpacity } from 'react-native';
-import MapView, { PROVIDER_GOOGLE, Region } from 'react-native-maps';
+import MapView, { PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import GorhomBottomSheet from '@gorhom/bottom-sheet';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocation } from '../../hooks/useLocation';
 import { useNearbyStations } from '../../hooks/useNearbyStations';
@@ -12,11 +11,12 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { StationMarker } from '../../components/map/StationMarker';
 import { FilterBar } from '../../components/map/FilterBar';
 import { StationDetailSheet } from '../../components/station/StationDetailSheet';
+import type { BottomSheetHandle } from '../../components/ui/BottomSheet';
 import type { ChargingStation } from '../../types/station';
 
 export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
-  const bottomSheetRef = useRef<GorhomBottomSheet>(null);
+  const bottomSheetRef = useRef<BottomSheetHandle>(null);
 
   const { location, isLoading: locationLoading } = useLocation();
   const { filter, selectedStation, selectStation, setBottomSheetOpen } = useMapStore();
@@ -27,21 +27,14 @@ export default function MapScreen() {
     filter,
   );
 
-  useEffect(() => {
-    if (selectedStation) {
-      bottomSheetRef.current?.expand();
-    } else {
-      bottomSheetRef.current?.close();
-    }
-  }, [selectedStation]);
-
   const handleMarkerPress = useCallback((station: ChargingStation) => {
     selectStation(station);
+    bottomSheetRef.current?.expand();
   }, [selectStation]);
 
   const handleMapPress = useCallback(() => {
-    selectStation(null);
     bottomSheetRef.current?.close();
+    selectStation(null);
   }, [selectStation]);
 
   const centerOnUser = useCallback(() => {
@@ -82,19 +75,20 @@ export default function MapScreen() {
         ))}
       </MapView>
 
-      {/* Filter bar — absolute top */}
+      {/* Filter bar */}
       <SafeAreaView style={styles.safeTop} edges={['top']}>
         <FilterBar />
       </SafeAreaView>
 
-      {/* Loading / error overlay */}
+      {/* Loading overlay */}
       {(isLoading || locationLoading) && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator color="#00D26A" size="large" />
+          <ActivityIndicator color="#00D26A" size="small" />
           <Text style={styles.loadingText}>İstasyonlar yükleniyor…</Text>
         </View>
       )}
 
+      {/* Error banner */}
       {isError && (
         <View style={styles.errorBanner}>
           <Text style={styles.errorText}>Veri yüklenemedi</Text>
@@ -104,7 +98,7 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* Station count badge */}
+      {/* Station count */}
       {!isLoading && (
         <View style={styles.countBadge}>
           <Ionicons name="flash" size={14} color="#00D26A" />
@@ -112,7 +106,7 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* Center on user button */}
+      {/* Center on user */}
       <TouchableOpacity style={styles.locateBtn} onPress={centerOnUser}>
         <Ionicons name="locate" size={22} color="#FFFFFF" />
       </TouchableOpacity>
@@ -124,7 +118,9 @@ export default function MapScreen() {
           onPress={() => router.push('/session/active')}
         >
           <View style={styles.sessionDot} />
-          <Text style={styles.sessionText}>Aktif Şarj: {activeSession.stationName}</Text>
+          <Text style={styles.sessionText} numberOfLines={1}>
+            Aktif Şarj: {activeSession.stationName}
+          </Text>
           <Ionicons name="chevron-forward" size={16} color="#00D26A" />
         </TouchableOpacity>
       )}
@@ -172,7 +168,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   errorText: { color: '#FECACA', fontSize: 14 },
-  retryBtn: { backgroundColor: '#EF4444', borderRadius: 6, paddingHorizontal: 12, paddingVertical: 4 },
+  retryBtn: {
+    backgroundColor: '#EF4444',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
   retryText: { color: '#FFFFFF', fontSize: 12, fontWeight: '600' },
   countBadge: {
     position: 'absolute',
@@ -221,7 +222,6 @@ const styles = StyleSheet.create({
   sessionText: { flex: 1, color: '#D1FAE5', fontSize: 13, fontWeight: '500' },
 });
 
-// Dark map style for Google Maps
 const DARK_MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#0F1117' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#6B7280' }] },
@@ -233,5 +233,4 @@ const DARK_MAP_STYLE = [
   { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#1A2332' }] },
   { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#1A2332' }] },
   { featureType: 'administrative', elementType: 'geometry.stroke', stylers: [{ color: '#374151' }] },
-  { featureType: 'administrative.land_parcel', elementType: 'labels.text.fill', stylers: [{ color: '#4B5563' }] },
 ];
