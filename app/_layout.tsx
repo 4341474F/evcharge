@@ -20,9 +20,9 @@ function AuthListener() {
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      if (!session) router.replace('/(auth)/login');
+      if (event === 'SIGNED_OUT') router.replace('/(auth)/login');
     });
 
     return () => subscription.unsubscribe();

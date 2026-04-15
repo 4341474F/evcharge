@@ -6,11 +6,12 @@ export interface UserLocation {
   longitude: number;
 }
 
-// Default: İstanbul merkezi
-const DEFAULT_LOCATION: UserLocation = { latitude: 41.0082, longitude: 28.9784 };
+// Ankara merkezi — San Francisco'dan daha mantıklı bir Türkiye default'u
+const DEFAULT_LOCATION: UserLocation = { latitude: 39.9334, longitude: 32.8597 };
 
 export function useLocation() {
   const [location, setLocation] = useState<UserLocation>(DEFAULT_LOCATION);
+  const [isRealLocation, setIsRealLocation] = useState(false);
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +37,11 @@ export function useLocation() {
         });
 
         if (mounted) {
-          setLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+          setLocation({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+          });
+          setIsRealLocation(true);
         }
       } catch (e) {
         if (mounted) setError('Konum alınamadı');
@@ -49,5 +54,5 @@ export function useLocation() {
     return () => { mounted = false; };
   }, []);
 
-  return { location, permissionGranted, isLoading, error };
+  return { location, isRealLocation, permissionGranted, isLoading, error };
 }

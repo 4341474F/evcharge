@@ -1,10 +1,10 @@
 import type { OCMStation } from './types';
 import type { ChargingStation, Connector, ConnectorType, NetworkName, StationStatus } from '../../types/station';
+import { MOCK_STATIONS } from './mockData';
 
 const OCM_BASE_URL = 'https://api.openchargemap.io/v3';
-const API_KEY = process.env.EXPO_PUBLIC_OCM_API_KEY || '';
+const API_KEY = process.env.EXPO_PUBLIC_OCM_API_KEY ?? '';
 
-// OCM connection type ID → ConnectorType mapping
 const CONNECTION_TYPE_MAP: Record<number, ConnectorType> = {
   2: 'CHAdeMO',
   25: 'Type2',
@@ -15,7 +15,6 @@ const CONNECTION_TYPE_MAP: Record<number, ConnectorType> = {
   27: 'Type2',
 };
 
-// OCM operator IDs for Turkish networks
 const NETWORK_MAP: Record<number, NetworkName> = {
   3538: 'ZES',
   3472: 'Eşarj',
@@ -33,10 +32,10 @@ function mapNetwork(operatorId: number | undefined): NetworkName {
 }
 
 function mapStatus(statusId: number | null | undefined): StationStatus {
-  if (statusId === null || statusId === undefined) return 'unknown';
+  if (statusId == null) return 'unknown';
   if (statusId === 50) return 'available';
   if (statusId === 10) return 'occupied';
-  if (statusId === 20 || statusId === 75 || statusId === 100) return 'out_of_service';
+  if ([20, 75, 100].includes(statusId)) return 'out_of_service';
   return 'unknown';
 }
 
@@ -78,38 +77,69 @@ export interface FetchStationsParams {
 export async function fetchNearbyStations(params: FetchStationsParams): Promise<ChargingStation[]> {
   const { latitude, longitude, distanceKm = 50, maxResults = 200 } = params;
 
-  const query = new URLSearchParams({
-    countrycode: 'TR',
-    latitude: String(latitude),
-    longitude: String(longitude),
-    distance: String(distanceKm),
-    distanceunit: 'KM',
-    maxresults: String(maxResults),
-    compact: 'false',
-    verbose: 'false',
-    key: API_KEY,
-  });
+  if (!API_KEY) {
+    console.warn('[OCM] API key not set, using mock data');
+    return MOCK_STATIONS;
+  }
 
-  const response = await fetch(`${OCM_BASE_URL}/poi?${query}`);
-  if (!response.ok) throw new Error(`OCM API error: ${response.status}`);
+  try {
+    const query = new URLSearchParams({
+      countrycode: 'TR',
+      latitude: String(latitude),
+      longitude: String(longitude),
+      distance: String(distanceKm),
+      distanceunit: 'KM',
+      maxresults: String(maxResults),
+      compact: 'false',
+      verbose: 'false',
+      key: API_KEY,
+    });
 
-  const data: OCMStation[] = await response.json();
-  return data.map(mapOCMStation);
+    const response = await fetch(`${OCM_BASE_URL}/poi?${query}`);
+
+    if (!response.ok) {
+      console.warn(`[OCM] API error ${response.status}, falling back to mock data`);
+      return MOCK_STATIONS;
+    }
+
+    const data: OCMStation[] = await response.json();
+
+    if (!Array.isArray(data) || data.length === 0) {
+      console.warn('[OCM] Empty response, falling back to mock data');
+      return MOCK_STATIONS;
+    }
+
+    return data.map(mapOCMStation);
+  } catch (err) {
+    console.warn('[OCM] Fetch failed, falling back to mock data:', err);
+    return MOCK_STATIONS;
+  }
 }
 
-export async function fetchStationById(uuid: string): Promise<ChargingStation | null> {
-  const query = new URLSearchParams({
-    chargepointid: uuid,
-    countrycode: 'TR',
-    compact: 'false',
-    verbose: 'false',
-    key: API_KEY,
-  });
+export async function fetchStationById(id: string): Promise<ChargingStation | null> {
+  // Check mock data first
+  const mock = MOCK_STATIONS.find((s) => s.id === id);
+  if (mock) return mock;
 
-  const response = await fetch(`${OCM_BASE_URL}/poi?${query}`);
-  if (!response.ok) return null;
+  if (!API_KEY) return null;
 
-  const data: OCMStation[] = await response.json();
-  if (!data.length) return null;
-  return mapOCMStation(data[0]);
+  try {
+    const query = new URLSearchParams({
+      chargepointid: id,
+      countrycode: 'TR',
+      compact: 'false',
+      verbose: 'false',
+      key: API_KEY,
+    });
+
+    const response = await fetch(`${OCM_BASE_URL}/poi?${query}`);
+    if (!response.ok) return null;
+
+    const data: OCMStation[] = await response.json();
+    if (!Array.isArray(data) || !data.length) return null;
+
+    return mapOCMStation(data[0]);
+  } catch {
+    return null;
+  }
 }

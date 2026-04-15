@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { View, StyleSheet, Text, ActivityIndicator, TouchableOpacity } from 'react-native';
 import MapView, { PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 import { router } from 'expo-router';
@@ -10,6 +10,8 @@ import { useMapStore } from '../../stores/mapStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { StationMarker } from '../../components/map/StationMarker';
 import { FilterBar } from '../../components/map/FilterBar';
+import { SearchBar } from '../../components/map/SearchBar';
+import { ZoomControls } from '../../components/map/ZoomControls';
 import { StationDetailSheet } from '../../components/station/StationDetailSheet';
 import type { BottomSheetHandle } from '../../components/ui/BottomSheet';
 import type { ChargingStation } from '../../types/station';
@@ -17,8 +19,9 @@ import type { ChargingStation } from '../../types/station';
 export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
   const bottomSheetRef = useRef<BottomSheetHandle>(null);
+  const currentRegion = useRef<Region | null>(null);
 
-  const { location, isLoading: locationLoading } = useLocation();
+  const { location, isRealLocation, isLoading: locationLoading } = useLocation();
   const { filter, selectedStation, selectStation, setBottomSheetOpen } = useMapStore();
   const { activeSession } = useSessionStore();
   const { stations, isLoading, isError, refetch } = useNearbyStations(
@@ -37,13 +40,69 @@ export default function MapScreen() {
     selectStation(null);
   }, [selectStation]);
 
-  const centerOnUser = useCallback(() => {
+  const handleSearchSelect = useCallback((station: ChargingStation) => {
+    selectStation(station);
+    bottomSheetRef.current?.expand();
+    mapRef.current?.animateToRegion({
+      latitude: station.latitude,
+      longitude: station.longitude,
+      latitudeDelta: 0.02,
+      longitudeDelta: 0.02,
+    }, 500);
+  }, [selectStation]);
+
+  const handleRegionChange = useCallback((region: Region) => {
+    currentRegion.current = region;
+  }, []);
+
+  // GPS gerçek konumu gelince haritayı oraya taşı
+  useEffect(() => {
+    if (!isRealLocation) return;
     mapRef.current?.animateToRegion({
       latitude: location.latitude,
       longitude: location.longitude,
-      latitudeDelta: 0.05,
-      longitudeDelta: 0.05,
-    });
+      latitudeDelta: 0.08,
+      longitudeDelta: 0.08,
+    }, 800);
+  }, [isRealLocation]);
+
+  const handleZoomIn = useCallback(() => {
+    const r = currentRegion.current ?? {
+      latitude: location.latitude,
+      longitude: location.longitude,
+      latitudeDelta: 0.1,
+      longitudeDelta: 0.1,
+    };
+    mapRef.current?.animateToRegion({
+      ...r,
+      latitudeDelta: r.latitudeDelta / 2,
+      longitudeDelta: r.longitudeDelta / 2,
+    }, 250);
+  }, [location]);
+
+  const handleZoomOut = useCallback(() => {
+    const r = currentRegion.current ?? {
+      latitude: location.latitude,
+      longitude: location.longitude,
+      latitudeDelta: 0.1,
+      longitudeDelta: 0.1,
+    };
+    mapRef.current?.animateToRegion({
+      ...r,
+      latitudeDelta: Math.min(r.latitudeDelta * 2, 80),
+      longitudeDelta: Math.min(r.longitudeDelta * 2, 80),
+    }, 250);
+  }, [location]);
+
+  const handleLocate = useCallback(() => {
+    const r = currentRegion.current;
+    mapRef.current?.animateToRegion({
+      latitude: location.latitude,
+      longitude: location.longitude,
+      // Koruma: eğer çok uzaktan bakıyorsa makul bir zoom'a getir
+      latitudeDelta: r && r.latitudeDelta < 0.5 ? r.latitudeDelta : 0.05,
+      longitudeDelta: r && r.longitudeDelta < 0.5 ? r.longitudeDelta : 0.05,
+    }, 500);
   }, [location]);
 
   const initialRegion: Region = {
@@ -61,9 +120,14 @@ export default function MapScreen() {
         provider={PROVIDER_GOOGLE}
         initialRegion={initialRegion}
         onPress={handleMapPress}
+        onRegionChangeComplete={handleRegionChange}
         showsUserLocation
         showsMyLocationButton={false}
+        showsCompass={false}
         customMapStyle={DARK_MAP_STYLE}
+        zoomEnabled
+        scrollEnabled
+        rotateEnabled={false}
       >
         {stations.map((station) => (
           <StationMarker
@@ -75,12 +139,13 @@ export default function MapScreen() {
         ))}
       </MapView>
 
-      {/* Filter bar */}
-      <SafeAreaView style={styles.safeTop} edges={['top']}>
+      {/* Top: search + filter */}
+      <SafeAreaView style={styles.topControls} edges={['top']}>
+        <SearchBar stations={stations} onSelect={handleSearchSelect} />
         <FilterBar />
       </SafeAreaView>
 
-      {/* Loading overlay */}
+      {/* Loading */}
       {(isLoading || locationLoading) && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator color="#00D26A" size="small" />
@@ -88,28 +153,33 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* Error banner */}
+      {/* Error */}
       {isError && (
         <View style={styles.errorBanner}>
-          <Text style={styles.errorText}>Veri yüklenemedi</Text>
+          <Ionicons name="warning-outline" size={16} color="#FECACA" />
+          <Text style={styles.errorText}>Demo veri gösteriliyor</Text>
           <TouchableOpacity onPress={() => refetch()} style={styles.retryBtn}>
-            <Text style={styles.retryText}>Tekrar Dene</Text>
+            <Ionicons name="refresh" size={14} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       )}
 
+      {/* Right controls: zoom + locate */}
+      <View style={styles.rightControls}>
+        <ZoomControls
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          onLocate={handleLocate}
+        />
+      </View>
+
       {/* Station count */}
       {!isLoading && (
         <View style={styles.countBadge}>
-          <Ionicons name="flash" size={14} color="#00D26A" />
+          <Ionicons name="flash" size={13} color="#00D26A" />
           <Text style={styles.countText}>{stations.length} istasyon</Text>
         </View>
       )}
-
-      {/* Center on user */}
-      <TouchableOpacity style={styles.locateBtn} onPress={centerOnUser}>
-        <Ionicons name="locate" size={22} color="#FFFFFF" />
-      </TouchableOpacity>
 
       {/* Active session banner */}
       {activeSession && (
@@ -125,7 +195,7 @@ export default function MapScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Station detail bottom sheet */}
+      {/* Station detail sheet */}
       <StationDetailSheet
         ref={bottomSheetRef}
         station={selectedStation}
@@ -141,44 +211,61 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0F1117' },
   map: { flex: 1 },
-  safeTop: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
+  topControls: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
+  rightControls: {
+    position: 'absolute',
+    right: 12,
+    bottom: 150,
+  },
   loadingOverlay: {
     position: 'absolute',
-    bottom: 120,
+    bottom: 130,
     alignSelf: 'center',
     backgroundColor: '#1A2332EE',
     borderRadius: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#2D3748',
   },
-  loadingText: { color: '#D1D5DB', fontSize: 14 },
+  loadingText: { color: '#D1D5DB', fontSize: 13 },
   errorBanner: {
     position: 'absolute',
-    top: 120,
-    left: 16,
-    right: 16,
-    backgroundColor: '#7F1D1D',
+    top: 140,
+    left: 12,
+    right: 12,
+    backgroundColor: '#7F1D1DCC',
     borderRadius: 10,
-    padding: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#EF444430',
   },
-  errorText: { color: '#FECACA', fontSize: 14 },
+  errorText: { color: '#FECACA', fontSize: 12, flex: 1 },
   retryBtn: {
-    backgroundColor: '#EF4444',
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#EF444430',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  retryText: { color: '#FFFFFF', fontSize: 12, fontWeight: '600' },
   countBadge: {
     position: 'absolute',
-    bottom: 110,
-    left: 16,
+    bottom: 100,
+    left: 12,
     backgroundColor: '#1A2332DD',
     borderRadius: 20,
     paddingHorizontal: 12,
@@ -190,27 +277,14 @@ const styles = StyleSheet.create({
     borderColor: '#2D3748',
   },
   countText: { color: '#D1D5DB', fontSize: 12 },
-  locateBtn: {
-    position: 'absolute',
-    bottom: 110,
-    right: 16,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#1A2332',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#2D3748',
-  },
   sessionBanner: {
     position: 'absolute',
-    bottom: 100,
-    left: 16,
-    right: 72,
+    bottom: 90,
+    left: 12,
+    right: 68,
     backgroundColor: '#064E3B',
     borderRadius: 10,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
