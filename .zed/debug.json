@@ -1,0 +1,11 @@
+[
+  {
+    "label": "Launch Core Service (with build)",
+    "adapter": "netcoredbg",
+    "request": "launch",
+    "preLaunchTask": "build",
+    "program": "/Users/xxx/Repositories/axxx/services/xxx/service/bin/Debug/net9.0/service.dll",
+    "cwd": "/Users/xxx/Repositories/xxx/services/xxx/service",
+    "env": { "ASPNETCORE_ENVIRONMENT": "Development" },
+  },
+]
