@@ -1,11 +1,10 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   Modal,
   FlatList,
   ActivityIndicator,
@@ -14,7 +13,10 @@ import {
   StatusBar,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useQuery } from "@tanstack/react-query";
 import { POPULAR_EV_MODELS, type EVModel } from "../../types/user";
+import { useAuthStore } from "../../stores/authStore";
+import { supabase } from "../../lib/supabase/client";
 
 // ─── Türkiye şehir verileri ───────────────────────────────────────────────────
 interface CityData {
@@ -359,10 +361,66 @@ function formatTime(minutes: number): string {
 }
 
 // ─── Bileşen ─────────────────────────────────────────────────────────────────
+// ─── DB'den gelen araç satırı ──────────────────────────────────────────────
+interface DBVehicle {
+  id: string;
+  brand: string;
+  model: string;
+  year: number;
+  battery_capacity_kwh: number;
+  range_km: number;
+  max_charge_kw: number;
+  connector_types: string[];
+  is_togg: boolean;
+}
+
+function dbVehicleToEVModel(v: DBVehicle): EVModel {
+  return {
+    brand: v.brand as EVModel["brand"],
+    model: `${v.model} (${v.year})`,
+    range_km: v.range_km,
+    battery_kwh: v.battery_capacity_kwh,
+    max_charge_kw: v.max_charge_kw,
+    connector_types: v.connector_types ?? [],
+  };
+}
+
 export default function RouteScreen() {
-  const defaultVehicle =
-    POPULAR_EV_MODELS.find((v) => v.brand === "Togg" && v.model === "T10X") ??
-    POPULAR_EV_MODELS[0];
+  const { user } = useAuthStore();
+
+  // Kullanıcının Supabase'deki araçlarını çek
+  const { data: dbVehicles = [] } = useQuery<DBVehicle[]>({
+    queryKey: ["vehicles-route", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from("vehicles")
+        .select(
+          "id, brand, model, year, battery_capacity_kwh, range_km, max_charge_kw, connector_types, is_togg",
+        )
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      if (error) return [];
+      return (data ?? []) as DBVehicle[];
+    },
+    enabled: !!user,
+  });
+
+  // DB araçlarını EVModel'e çevir ve POPULAR_EV_MODELS ile birleştir
+  // DB araçları her zaman listenin başında görünür
+  const vehicleList = useMemo<EVModel[]>(() => {
+    const userModels = dbVehicles.map(dbVehicleToEVModel);
+    // Yineleme olmaması için kullanıcı araçlarını POPULAR listesinden çıkar
+    const userKeys = new Set(
+      userModels.map((v) => `${v.brand}|${v.model.split(" (")[0]}`),
+    );
+    const filteredPopular = POPULAR_EV_MODELS.filter(
+      (v) => !userKeys.has(`${v.brand}|${v.model}`),
+    );
+    return [...userModels, ...filteredPopular];
+  }, [dbVehicles]);
+
+  const defaultVehicle = vehicleList[0] ?? POPULAR_EV_MODELS[0];
 
   const [selectedVehicle, setSelectedVehicle] =
     useState<EVModel>(defaultVehicle);
@@ -417,10 +475,33 @@ export default function RouteScreen() {
   }, [fromCity, toCity, selectedVehicle]);
 
   // ─── Araç Seçim Modalı ─────────────────────────────────────────────────
+  // Araç listesi güncellenince selectedVehicle'ı ilk araca senkronize et
+  React.useEffect(() => {
+    if (vehicleList.length > 0) {
+      setSelectedVehicle((prev) => {
+        // Eğer seçili araç hâlâ listede varsa değiştirme
+        const stillExists = vehicleList.some(
+          (v) => v.brand === prev.brand && v.model === prev.model,
+        );
+        return stillExists ? prev : vehicleList[0];
+      });
+    }
+  }, [vehicleList]);
+
+  // Kullanıcı aracı mı yoksa popüler model mi?
+  const isUserVehicle = useCallback(
+    (item: EVModel) =>
+      dbVehicles.some(
+        (v) => v.brand === item.brand && item.model.startsWith(v.model),
+      ),
+    [dbVehicles],
+  );
+
   const renderVehicleItem = ({ item }: { item: EVModel }) => {
     const isSelected =
       item.brand === selectedVehicle.brand &&
       item.model === selectedVehicle.model;
+    const fromDB = isUserVehicle(item);
     return (
       <TouchableOpacity
         style={[styles.modalItem, isSelected && styles.modalItemSelected]}
@@ -432,11 +513,19 @@ export default function RouteScreen() {
             <Text style={styles.modalItemTitle}>
               {item.brand} {item.model}
             </Text>
-            {item.brand === "Togg" && (
-              <View style={styles.toggBadgeSmall}>
-                <Text style={styles.toggBadgeText}>Yerli</Text>
-              </View>
-            )}
+            <View style={{ flexDirection: "row", gap: 6 }}>
+              {fromDB && (
+                <View style={styles.myVehicleBadge}>
+                  <Ionicons name="person" size={9} color="#3B82F6" />
+                  <Text style={styles.myVehicleBadgeText}>Aracım</Text>
+                </View>
+              )}
+              {item.brand === "Togg" && (
+                <View style={styles.toggBadgeSmall}>
+                  <Text style={styles.toggBadgeText}>Yerli</Text>
+                </View>
+              )}
+            </View>
           </View>
           <Text style={styles.modalItemSub}>
             {item.range_km} km • {item.battery_kwh} kWh • Maks{" "}
@@ -581,11 +670,27 @@ export default function RouteScreen() {
             <View style={{ flex: 1 }}>
               <View style={styles.vehicleSelectorTop}>
                 <Text style={styles.vehicleLabel}>Aracınız:</Text>
-                {selectedVehicle.brand === "Togg" && (
-                  <View style={styles.toggBadge}>
-                    <Text style={styles.toggBadgeText}>🏭 Yerli Üretim</Text>
-                  </View>
-                )}
+                <View style={{ flexDirection: "row", gap: 6 }}>
+                  {isUserVehicle(selectedVehicle) && (
+                    <View
+                      style={[
+                        styles.toggBadge,
+                        { backgroundColor: "#1E3A5F", borderColor: "#3B82F6" },
+                      ]}
+                    >
+                      <Text
+                        style={[styles.toggBadgeText, { color: "#3B82F6" }]}
+                      >
+                        👤 Kayıtlı Aracım
+                      </Text>
+                    </View>
+                  )}
+                  {selectedVehicle.brand === "Togg" && (
+                    <View style={styles.toggBadge}>
+                      <Text style={styles.toggBadgeText}>🏭 Yerli Üretim</Text>
+                    </View>
+                  )}
+                </View>
               </View>
               <Text style={styles.vehicleName}>
                 {selectedVehicle.brand} {selectedVehicle.model}
@@ -944,6 +1049,7 @@ export default function RouteScreen() {
       </ScrollView>
 
       {/* ─── ARAÇ SEÇİM MODALI ──────────────────────────────────────────── */}
+      {/* Araç Seçim Modalı */}
       <Modal
         visible={vehicleModalVisible}
         animationType="slide"
@@ -954,20 +1060,38 @@ export default function RouteScreen() {
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Araç Seçin</Text>
-              <TouchableOpacity
-                onPress={() => setVehicleModalVisible(false)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons name="close" size={24} color="#9CA3AF" />
+              <Text style={styles.modalTitle}>Araç Seç</Text>
+              <TouchableOpacity onPress={() => setVehicleModalVisible(false)}>
+                <Ionicons name="close" size={22} color="#9CA3AF" />
               </TouchableOpacity>
             </View>
+            {dbVehicles.length > 0 && (
+              <View style={styles.modalSectionHeader}>
+                <Ionicons name="person-outline" size={13} color="#3B82F6" />
+                <Text style={styles.modalSectionTitle}>Kayıtlı Araçlarım</Text>
+              </View>
+            )}
             <FlatList
-              data={POPULAR_EV_MODELS}
+              data={vehicleList}
               keyExtractor={(item) => `${item.brand}-${item.model}`}
               renderItem={renderVehicleItem}
-              showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.modalList}
+              showsVerticalScrollIndicator={false}
+              ListHeaderComponent={
+                dbVehicles.length > 0 ? undefined : (
+                  <View style={styles.modalNoVehicleHint}>
+                    <Ionicons
+                      name="information-circle-outline"
+                      size={15}
+                      color="#6B7280"
+                    />
+                    <Text style={styles.modalNoVehicleText}>
+                      Profil {">"} Araçlarımı Yönet'ten araç ekleyerek
+                      listenizin başında görebilirsiniz.
+                    </Text>
+                  </View>
+                )
+              }
             />
           </View>
         </View>
@@ -1704,7 +1828,58 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   modalItemSub: {
-    fontSize: 12,
+    fontSize: 13,
     color: "#6B7280",
+  },
+  myVehicleBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#1E3A5F",
+    borderRadius: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: "#3B82F640",
+  },
+  myVehicleBadgeText: {
+    color: "#3B82F6",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  modalSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "#1E3A5F30",
+    borderBottomWidth: 1,
+    borderBottomColor: "#3B82F620",
+  },
+  modalSectionTitle: {
+    color: "#3B82F6",
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  modalNoVehicleHint: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#1A2332",
+    borderRadius: 10,
+    padding: 12,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: "#2D3748",
+  },
+  modalNoVehicleText: {
+    flex: 1,
+    color: "#6B7280",
+    fontSize: 12,
+    lineHeight: 18,
   },
 });

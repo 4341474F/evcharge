@@ -18,7 +18,14 @@ export function useLocation() {
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const mountedRef = useRef(true);
+
+  function retry() {
+    setIsLoading(true);
+    setError(null);
+    setRetryCount((c) => c + 1);
+  }
 
   useEffect(() => {
     mountedRef.current = true;
@@ -30,6 +37,7 @@ export function useLocation() {
 
         if (status !== "granted") {
           setPermissionGranted(false);
+          setError("Konum izni verilmedi");
           setIsLoading(false);
           return;
         }
@@ -80,7 +88,14 @@ export function useLocation() {
     return () => {
       mountedRef.current = false;
     };
-  }, []);
+  }, [retryCount]);
 
-  return { location, isRealLocation, permissionGranted, isLoading, error };
+  return {
+    location,
+    isRealLocation,
+    permissionGranted,
+    isLoading,
+    error,
+    retry,
+  };
 }

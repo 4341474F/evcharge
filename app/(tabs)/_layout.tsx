@@ -2,6 +2,8 @@ import { Tabs } from "expo-router";
 import { View, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSessionStore } from "../../stores/sessionStore";
+import { useFavorites } from "../../hooks/useFavorites";
+import { useAuthStore } from "../../stores/authStore";
 
 function TabBarIcon({
   name,
@@ -15,6 +17,9 @@ function TabBarIcon({
 
 export default function TabsLayout() {
   const { activeSession } = useSessionStore();
+  const { user } = useAuthStore();
+  const { favorites } = useFavorites();
+  const favCount = favorites.length;
 
   return (
     <Tabs
@@ -69,6 +74,14 @@ export default function TabsLayout() {
         options={{
           title: "Profil",
           tabBarIcon: ({ color }) => <TabBarIcon name="person" color={color} />,
+          tabBarBadge: user && favCount > 0 ? favCount : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: "#EC4899",
+            fontSize: 10,
+            minWidth: 18,
+            height: 18,
+            borderRadius: 9,
+          },
         }}
       />
     </Tabs>

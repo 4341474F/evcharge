@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -50,12 +50,25 @@ export default function ActiveSessionScreen() {
     return () => pulse.stop();
   }, []);
 
+  // Konektör gücünden gerçekçi şarj hızı hesapla
+  // Gerçek dünyada: DC verimlilik ~%92, AC ~%88
+  // Simülasyon 10x hızlandırılmış (demo için)
+  const SIMULATION_SPEED = 10;
+
+  function calcKwhPerSecond(powerKw: number): number {
+    const clampedKw = Math.max(1.4, Math.min(powerKw, 350)); // 1.4–350 kW arası
+    const efficiency = clampedKw >= 50 ? 0.92 : 0.88; // DC vs AC verimi
+    return (clampedKw * efficiency * SIMULATION_SPEED) / 3600;
+  }
+
   // Simulate charging progress
   useEffect(() => {
     if (!activeSession) return;
 
     const pricePerKwh = activeSession.pricePerKwh || 8.5;
-    const kwhPerSecond = 0.022 / 60; // ~22kW charger → kWh per second
+    // powerKw activeSession'da varsa kullan, yoksa connector tipinden tahmin et
+    const powerKw = activeSession.powerKw ?? 22;
+    const kwhPerSecond = calcKwhPerSecond(powerKw);
 
     intervalRef.current = setInterval(() => {
       updateSession((prev: typeof activeSession) => {
@@ -173,16 +186,20 @@ export default function ActiveSessionScreen() {
           </View>
         </View>
 
-        {/* Price info */}
-        <View style={styles.priceInfo}>
-          <Ionicons
-            name="information-circle-outline"
-            size={16}
-            color="#6B7280"
-          />
-          <Text style={styles.priceText}>
-            Birim fiyat: ₺{(activeSession.pricePerKwh || 8.5).toFixed(2)}/kWh
-          </Text>
+        {/* Price + power info */}
+        <View style={styles.priceInfoRow}>
+          <View style={styles.priceInfo}>
+            <Ionicons name="flash-outline" size={14} color="#F59E0B" />
+            <Text style={styles.priceText}>
+              {activeSession.powerKw ?? 22} kW şarj gücü
+            </Text>
+          </View>
+          <View style={styles.priceInfo}>
+            <Ionicons name="card-outline" size={14} color="#6B7280" />
+            <Text style={styles.priceText}>
+              ₺{(activeSession.pricePerKwh || 8.5).toFixed(2)}/kWh
+            </Text>
+          </View>
         </View>
 
         {/* Stop button */}
@@ -276,11 +293,16 @@ const styles = StyleSheet.create({
   metricUnit: { fontSize: 14, color: "#9CA3AF" },
   metricLabel: { color: "#6B7280", fontSize: 12 },
   metricDivider: { width: 1, backgroundColor: "#2D3748", alignSelf: "stretch" },
+  priceInfoRow: {
+    flexDirection: "row",
+    gap: 16,
+    marginBottom: 32,
+    flexWrap: "wrap",
+  },
   priceInfo: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginBottom: 32,
   },
   priceText: { color: "#6B7280", fontSize: 13 },
   stopBtn: {

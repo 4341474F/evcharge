@@ -1,21 +1,20 @@
 import {
   useRef,
-  useEffect,
+  useState,
   forwardRef,
   useImperativeHandle,
   type ReactNode,
-} from 'react';
+} from "react";
 import {
-  Modal,
   View,
   StyleSheet,
   Animated,
   TouchableWithoutFeedback,
   Dimensions,
   PanResponder,
-} from 'react-native';
+} from "react-native";
 
-const SCREEN_HEIGHT = Dimensions.get('window').height;
+const SCREEN_HEIGHT = Dimensions.get("window").height;
 
 export interface BottomSheetHandle {
   expand: () => void;
@@ -32,12 +31,11 @@ const BottomSheet = forwardRef<BottomSheetHandle, BottomSheetProps>(
   ({ children, onClose, snapPercent = 0.5 }, ref) => {
     const sheetHeight = SCREEN_HEIGHT * snapPercent;
     const translateY = useRef(new Animated.Value(sheetHeight)).current;
-    const visible = useRef(new Animated.Value(0)).current;
-    const isOpen = useRef(false);
+    const [visible, setVisible] = useState(false);
 
     const open = () => {
-      isOpen.current = true;
-      visible.setValue(1);
+      setVisible(true);
+      translateY.setValue(sheetHeight);
       Animated.spring(translateY, {
         toValue: 0,
         useNativeDriver: true,
@@ -52,8 +50,7 @@ const BottomSheet = forwardRef<BottomSheetHandle, BottomSheetProps>(
         duration: 250,
         useNativeDriver: true,
       }).start(() => {
-        isOpen.current = false;
-        visible.setValue(0);
+        setVisible(false);
         onClose?.();
       });
     };
@@ -70,60 +67,63 @@ const BottomSheet = forwardRef<BottomSheetHandle, BottomSheetProps>(
           if (g.dy > sheetHeight * 0.35 || g.vy > 0.5) {
             close();
           } else {
-            Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
+            Animated.spring(translateY, {
+              toValue: 0,
+              useNativeDriver: true,
+            }).start();
           }
         },
       }),
     ).current;
 
-    const opacity = visible.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
+    if (!visible) return null;
 
     return (
-      <Animated.View
-        pointerEvents={isOpen.current ? 'auto' : 'none'}
-        style={[StyleSheet.absoluteFill, styles.wrapper, { opacity }]}
-      >
+      <View style={[StyleSheet.absoluteFill, styles.wrapper]}>
         <TouchableWithoutFeedback onPress={close}>
           <View style={styles.backdrop} />
         </TouchableWithoutFeedback>
 
         <Animated.View
-          style={[styles.sheet, { height: sheetHeight, transform: [{ translateY }] }]}
+          style={[
+            styles.sheet,
+            { height: sheetHeight, transform: [{ translateY }] },
+          ]}
           {...panResponder.panHandlers}
         >
           <View style={styles.handle} />
           {children}
         </Animated.View>
-      </Animated.View>
+      </View>
     );
   },
 );
 
-BottomSheet.displayName = 'BottomSheet';
+BottomSheet.displayName = "BottomSheet";
 export default BottomSheet;
 
 const styles = StyleSheet.create({
   wrapper: {
     zIndex: 999,
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: "rgba(0,0,0,0.5)",
   },
   sheet: {
-    backgroundColor: '#1A2332',
+    backgroundColor: "#1A2332",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingTop: 12,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   handle: {
     width: 40,
     height: 4,
-    backgroundColor: '#4B5563',
+    backgroundColor: "#4B5563",
     borderRadius: 2,
-    alignSelf: 'center',
+    alignSelf: "center",
     marginBottom: 8,
   },
 });

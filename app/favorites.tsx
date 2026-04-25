@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAuthStore } from "../stores/authStore";
 import { useFavorites } from "../hooks/useFavorites";
+import { useMapStore } from "../stores/mapStore";
 
 const NETWORK_COLORS: Record<string, string> = {
   ZES: "#00D26A",
@@ -53,6 +54,7 @@ interface FavoriteRow {
 export default function FavoritesScreen() {
   const { user } = useAuthStore();
   const { favorites, isLoading, toggleFavorite } = useFavorites();
+  const { setPendingMapFocus } = useMapStore();
 
   function handleDelete(item: FavoriteRow) {
     Alert.alert(
@@ -93,17 +95,14 @@ export default function FavoritesScreen() {
   }
 
   function handleCardPress(item: FavoriteRow) {
-    Alert.alert(
-      item.station_name,
-      "Harita ekranına gidip bu istasyonu görmek ister misiniz?",
-      [
-        { text: "İptal", style: "cancel" },
-        {
-          text: "Haritaya Git",
-          onPress: () => router.push("/(tabs)"),
-        },
-      ],
-    );
+    if (item.latitude != null && item.longitude != null) {
+      setPendingMapFocus({
+        lat: item.latitude,
+        lon: item.longitude,
+        stationName: item.station_name,
+      });
+    }
+    router.push("/(tabs)");
   }
 
   // ── Giriş yapılmamış ──────────────────────────────────────────────────────

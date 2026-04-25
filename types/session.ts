@@ -1,4 +1,4 @@
-export type SessionStatus = 'active' | 'completed' | 'cancelled';
+export type SessionStatus = "active" | "completed" | "cancelled";
 
 export interface ChargingSession {
   id: string;
@@ -25,4 +25,5 @@ export interface ActiveSession {
   energyKwh: number;
   costTl: number;
   pricePerKwh: number;
+  powerKw: number;
 }

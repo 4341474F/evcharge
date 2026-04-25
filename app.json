@@ -11,19 +11,21 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0F1117"
+      "backgroundColor": "#0F1117",
+      "imageWidth": 200
     },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.sarjbul.app",
       "buildNumber": "1",
       "config": {
-        "googleMapsApiKey": ""
+        "googleMapsApiKey": "$(EXPO_PUBLIC_GOOGLE_MAPS_API_KEY)"
       },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "ŞarjBul, yakınındaki elektrikli araç şarj istasyonlarını harita üzerinde göstermek için konumuna ihtiyaç duyuyor.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "ŞarjBul, yakınındaki elektrikli araç şarj istasyonlarını harita üzerinde göstermek için konumuna ihtiyaç duyuyor."
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "ŞarjBul, yakınındaki elektrikli araç şarj istasyonlarını harita üzerinde göstermek için konumuna ihtiyaç duyuyor.",
+        "NSCameraUsageDescription": "ŞarjBul, şarj istasyonu QR kodlarını okumak için kameraya ihtiyaç duyuyor."
       }
     },
     "android": {
@@ -36,13 +38,10 @@
       "versionCode": 1,
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyBhHyezo3e3Ki6cki0IPNx2ltt_2JA2hdk"
+          "apiKey": "$(EXPO_PUBLIC_GOOGLE_MAPS_API_KEY)"
         }
       },
-      "permissions": [
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
-      ]
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
     },
     "plugins": [
       [
@@ -62,7 +61,9 @@
     "extra": {
       "eas": {
         "projectId": ""
-      }
+      },
+      "appVersion": "1.0.0",
+      "supportEmail": "destek@sarjbul.com"
     }
   }
 }

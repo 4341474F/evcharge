@@ -7,7 +7,11 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useMapStore } from "../../stores/mapStore";
-import type { NetworkName, ConnectorType } from "../../types/station";
+import type {
+  NetworkName,
+  ConnectorType,
+  StationFilter,
+} from "../../types/station";
 
 const NETWORKS: (NetworkName | "Tümü")[] = [
   "Tümü",
@@ -28,8 +32,21 @@ const CONNECTORS: (ConnectorType | "Tümü")[] = [
   "GBT",
 ];
 
+function countActiveFilters(filter: StationFilter): number {
+  let count = 0;
+  if (filter.network !== "Tümü") count++;
+  if (filter.connectorType !== "Tümü") count++;
+  if (filter.onlyAvailable) count++;
+  if (filter.onlyGreenEnergy) count++;
+  if (filter.onlyHPC) count++;
+  if (filter.locationType !== "Tümü") count++;
+  if (filter.minPowerKw > 0) count++;
+  return count;
+}
+
 export function FilterBar() {
-  const { filter, setFilter } = useMapStore();
+  const { filter, setFilter, resetFilter } = useMapStore();
+  const activeCount = countActiveFilters(filter);
 
   return (
     <View style={styles.wrapper}>
@@ -38,6 +55,24 @@ export function FilterBar() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.row}
       >
+        {/* Sıfırla butonu — sadece aktif filtre varsa göster */}
+        {activeCount > 0 && (
+          <>
+            <TouchableOpacity
+              style={styles.resetBtn}
+              onPress={resetFilter}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
+              <Ionicons name="close-circle" size={14} color="#EF4444" />
+              <Text style={styles.resetBtnText}>Sıfırla</Text>
+              <View style={styles.resetCountBadge}>
+                <Text style={styles.resetCountText}>{activeCount}</Text>
+              </View>
+            </TouchableOpacity>
+            <View style={styles.divider} />
+          </>
+        )}
+
         {/* Network filter */}
         {NETWORKS.map((n) => (
           <TouchableOpacity
@@ -108,7 +143,7 @@ export function FilterBar() {
           <Text
             style={[
               styles.chipText,
-              filter.onlyGreenEnergy && styles.chipTextActive,
+              filter.onlyGreenEnergy && styles.chipTextGreen,
             ]}
           >
             🌱 Yeşil Şarj
@@ -143,7 +178,7 @@ export function FilterBar() {
           <Text
             style={[
               styles.chipText,
-              filter.locationType === "highway" && styles.chipTextActive,
+              filter.locationType === "highway" && styles.chipTextLocation,
             ]}
           >
             🛣️ Otoyol
@@ -165,7 +200,7 @@ export function FilterBar() {
           <Text
             style={[
               styles.chipText,
-              filter.locationType === "mall" && styles.chipTextActive,
+              filter.locationType === "mall" && styles.chipTextLocation,
             ]}
           >
             🏬 AVM
@@ -188,7 +223,7 @@ export function FilterBar() {
           <Text
             style={[
               styles.chipText,
-              filter.locationType === "gas_station" && styles.chipTextActive,
+              filter.locationType === "gas_station" && styles.chipTextLocation,
             ]}
           >
             ⛽ Akaryakıt
@@ -208,6 +243,39 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
+
+  // Reset butonu
+  resetBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    backgroundColor: "#7F1D1D30",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#EF444450",
+  },
+  resetBtnText: {
+    color: "#EF4444",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  resetCountBadge: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#EF4444",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  resetCountText: {
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: "800",
+  },
+
+  // Chip
   chip: {
     paddingHorizontal: 12,
     paddingVertical: 7,
@@ -236,6 +304,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#1E3A5F",
     borderColor: "#3B82F6",
   },
+
+  // Chip text
   chipText: {
     color: "#D1D5DB",
     fontSize: 12,
@@ -245,10 +315,19 @@ const styles = StyleSheet.create({
     color: "#0F1117",
     fontWeight: "700",
   },
+  chipTextGreen: {
+    color: "#00D26A",
+    fontWeight: "700",
+  },
   chipTextHPC: {
     color: "#F59E0B",
     fontWeight: "700",
   },
+  chipTextLocation: {
+    color: "#3B82F6",
+    fontWeight: "700",
+  },
+
   divider: {
     width: 1,
     height: 20,

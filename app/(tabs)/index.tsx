@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, useState } from "react";
+import { useRef, useCallback, useEffect, useState, useMemo } from "react";
 import {
   View,
   StyleSheet,
@@ -28,20 +28,26 @@ export default function MapScreen() {
   const currentRegion = useRef<Region | null>(null);
   const locationRef = useRef({ latitude: 39.9334, longitude: 32.8597 });
   const [mapReady, setMapReady] = useState(false);
+  const [mapRegion, setMapRegion] = useState<Region | null>(null);
 
   const {
     location,
     isRealLocation,
     isLoading: locationLoading,
+    error: locationError,
+    retry: retryLocation,
   } = useLocation();
-  const { filter, selectedStation, selectStation, setBottomSheetOpen } =
-    useMapStore();
-  const { activeSession } = useSessionStore();
-  const { stations, isLoading, isError, refetch } = useNearbyStations(
-    location.latitude,
-    location.longitude,
+  const {
     filter,
-  );
+    selectedStation,
+    selectStation,
+    setBottomSheetOpen,
+    pendingMapFocus,
+    setPendingMapFocus,
+  } = useMapStore();
+  const { activeSession } = useSessionStore();
+  const { stations, isLoading, isFetching, isError, refetch } =
+    useNearbyStations(location.latitude, location.longitude, filter);
 
   const handleMarkerPress = useCallback(
     (station: ChargingStation) => {
@@ -75,7 +81,43 @@ export default function MapScreen() {
 
   const handleRegionChange = useCallback((region: Region) => {
     currentRegion.current = region;
+    setMapRegion(region); // visibleStations useMemo'sunu tetikler
   }, []);
+
+  // Harita viewport'undaki istasyonları filtrele (max 80 marker)
+  const visibleStations = useMemo(() => {
+    const r = mapRegion ?? currentRegion.current;
+    if (!r) return stations.slice(0, 60);
+    // Biraz padding ile genişlet
+    const latPad = r.latitudeDelta * 0.3;
+    const lonPad = r.longitudeDelta * 0.3;
+    const inView = stations.filter(
+      (s) =>
+        s.latitude >= r.latitude - r.latitudeDelta / 2 - latPad &&
+        s.latitude <= r.latitude + r.latitudeDelta / 2 + latPad &&
+        s.longitude >= r.longitude - r.longitudeDelta / 2 - lonPad &&
+        s.longitude <= r.longitude + r.longitudeDelta / 2 + lonPad,
+    );
+    // Zoom out'ta çok fazla marker varsa sayıyı sınırla
+    if (r.latitudeDelta > 1) return inView.slice(0, 30);
+    if (r.latitudeDelta > 0.5) return inView.slice(0, 50);
+    return inView.slice(0, 80);
+  }, [stations, mapRegion]);
+
+  // pendingMapFocus geldiğinde o koordinata animasyonla git
+  useEffect(() => {
+    if (!pendingMapFocus || !mapReady) return;
+    mapRef.current?.animateToRegion(
+      {
+        latitude: pendingMapFocus.lat,
+        longitude: pendingMapFocus.lon,
+        latitudeDelta: 0.02,
+        longitudeDelta: 0.02,
+      },
+      600,
+    );
+    setPendingMapFocus(null);
+  }, [pendingMapFocus, mapReady]);
 
   // locationRef'i her zaman güncel tut (stale closure'ı önler)
   useEffect(() => {
@@ -173,7 +215,7 @@ export default function MapScreen() {
         scrollEnabled
         rotateEnabled={false}
       >
-        {stations.map((station) => (
+        {visibleStations.map((station) => (
           <StationMarker
             key={station.id}
             station={station}
@@ -189,21 +231,56 @@ export default function MapScreen() {
         <FilterBar />
       </SafeAreaView>
 
-      {/* Loading */}
-      {(isLoading || locationLoading) && (
+      {/* Yükleniyor */}
+      {(isLoading || locationLoading) && stations.length === 0 && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator color="#00D26A" size="small" />
-          <Text style={styles.loadingText}>İstasyonlar yükleniyor…</Text>
+          <Text style={styles.loadingText}>
+            {locationLoading ? "Konum alınıyor…" : "İstasyonlar yükleniyor…"}
+          </Text>
         </View>
       )}
 
-      {/* Error */}
+      {/* Arka planda yenileme göstergesi — stale data varken */}
+      {isFetching && !isLoading && stations.length > 0 && (
+        <View style={styles.refreshingBadge}>
+          <ActivityIndicator color="#6B7280" size="small" />
+          <Text style={styles.refreshingText}>Güncelleniyor…</Text>
+        </View>
+      )}
+
+      {/* Error — OCM API */}
       {isError && (
         <View style={styles.errorBanner}>
           <Ionicons name="warning-outline" size={16} color="#FECACA" />
           <Text style={styles.errorText}>Demo veri gösteriliyor</Text>
           <TouchableOpacity onPress={() => refetch()} style={styles.retryBtn}>
             <Ionicons name="refresh" size={14} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Error — Konum */}
+      {locationError && (
+        <View
+          style={[
+            styles.errorBanner,
+            {
+              top: 185,
+              backgroundColor: "#1E3A5F99",
+              borderColor: "#3B82F630",
+            },
+          ]}
+        >
+          <Ionicons name="location-outline" size={16} color="#93C5FD" />
+          <Text style={[styles.errorText, { color: "#93C5FD" }]}>
+            Konum alınamadı
+          </Text>
+          <TouchableOpacity
+            onPress={retryLocation}
+            style={[styles.retryBtn, { backgroundColor: "#3B82F630" }]}
+          >
+            <Ionicons name="refresh" size={14} color="#93C5FD" />
           </TouchableOpacity>
         </View>
       )}
@@ -221,7 +298,9 @@ export default function MapScreen() {
       {!isLoading && (
         <View style={styles.countBadge}>
           <Ionicons name="flash" size={13} color="#00D26A" />
-          <Text style={styles.countText}>{stations.length} istasyon</Text>
+          <Text style={styles.countText}>
+            {visibleStations.length} istasyon
+          </Text>
         </View>
       )}
 
@@ -305,6 +384,24 @@ const styles = StyleSheet.create({
     backgroundColor: "#EF444430",
     justifyContent: "center",
     alignItems: "center",
+  },
+  refreshingBadge: {
+    position: "absolute",
+    bottom: 100,
+    right: 12,
+    backgroundColor: "#1A2332DD",
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderColor: "#2D3748",
+  },
+  refreshingText: {
+    color: "#6B7280",
+    fontSize: 11,
   },
   countBadge: {
     position: "absolute",
