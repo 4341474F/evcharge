@@ -1,5 +1,10 @@
-import { create } from 'zustand';
-import type { ConnectorType, NetworkName, StationFilter, ChargingStation } from '../types/station';
+import { create } from "zustand";
+import type {
+  ConnectorType,
+  NetworkName,
+  StationFilter,
+  ChargingStation,
+} from "../types/station";
 
 interface MapState {
   filter: StationFilter;
@@ -12,10 +17,13 @@ interface MapState {
 }
 
 const DEFAULT_FILTER: StationFilter = {
-  network: 'Tümü',
-  connectorType: 'Tümü',
+  network: "Tümü",
+  connectorType: "Tümü",
   onlyAvailable: false,
   minPowerKw: 0,
+  onlyGreenEnergy: false,
+  locationType: "Tümü",
+  onlyHPC: false,
 };
 
 export const useMapStore = create<MapState>((set) => ({

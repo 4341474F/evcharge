@@ -16,8 +16,14 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.sarjbul.app",
+      "buildNumber": "1",
       "config": {
         "googleMapsApiKey": ""
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "ŞarjBul, yakınındaki elektrikli araç şarj istasyonlarını harita üzerinde göstermek için konumuna ihtiyaç duyuyor.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "ŞarjBul, yakınındaki elektrikli araç şarj istasyonlarını harita üzerinde göstermek için konumuna ihtiyaç duyuyor."
       }
     },
     "android": {
@@ -27,11 +33,16 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.sarjbul.app",
+      "versionCode": 1,
       "config": {
         "googleMaps": {
-          "apiKey": ""
+          "apiKey": "AIzaSyBhHyezo3e3Ki6cki0IPNx2ltt_2JA2hdk"
         }
-      }
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "plugins": [
       [
@@ -47,6 +58,11 @@
           "locationWhenInUsePermission": "ŞarjBul, yakınındaki şarj istasyonlarını göstermek için konumuna ihtiyaç duyuyor."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": ""
+      }
+    }
   }
 }
