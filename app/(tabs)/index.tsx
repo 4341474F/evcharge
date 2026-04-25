@@ -46,7 +46,7 @@ export default function MapScreen() {
     setPendingMapFocus,
   } = useMapStore();
   const { activeSession } = useSessionStore();
-  const { stations, isLoading, isFetching, isError, refetch } =
+  const { stations, rawStations, isLoading, isFetching, isError, refetch } =
     useNearbyStations(location.latitude, location.longitude, filter);
 
   const handleMarkerPress = useCallback(
@@ -227,7 +227,7 @@ export default function MapScreen() {
 
       {/* Top: search + filter */}
       <SafeAreaView style={styles.topControls} edges={["top"]}>
-        <SearchBar stations={stations} onSelect={handleSearchSelect} />
+        <SearchBar stations={rawStations} onSelect={handleSearchSelect} />
         <FilterBar />
       </SafeAreaView>
 

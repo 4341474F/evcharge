@@ -72,5 +72,13 @@ export function useNearbyStations(
 
   const filtered = query.data ? applyFilter(query.data, filter) : [];
 
-  return { ...query, stations: filtered, isFetching: query.isFetching };
+  // Ham veri — UI filtresi ve viewport uygulanmamış
+  const rawStations = query.data ?? [];
+
+  return {
+    ...query,
+    stations: filtered,
+    rawStations,
+    isFetching: query.isFetching,
+  };
 }

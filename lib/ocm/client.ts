@@ -122,6 +122,63 @@ export interface FetchStationsParams {
   maxResults?: number;
 }
 
+// Tüm Türkiye istasyonlarını arama için çeker — konum bağımsız
+// Sonuçlar cache'lenir, tekrar çekilmez
+let _turkeyStationsCache: ChargingStation[] | null = null;
+let _turkeyStationsFetching: Promise<ChargingStation[]> | null = null;
+
+export async function fetchAllTurkeyStations(): Promise<ChargingStation[]> {
+  // Cache varsa direkt döndür
+  if (_turkeyStationsCache) return _turkeyStationsCache;
+
+  // Aynı anda birden fazla çağrı varsa aynı promise'i beklet
+  if (_turkeyStationsFetching) return _turkeyStationsFetching;
+
+  if (!API_KEY) {
+    _turkeyStationsCache = MOCK_STATIONS;
+    return MOCK_STATIONS;
+  }
+
+  _turkeyStationsFetching = (async () => {
+    try {
+      const query = new URLSearchParams({
+        countrycode: "TR",
+        maxresults: "500",
+        compact: "true",
+        verbose: "false",
+        key: API_KEY,
+      });
+
+      const response = await fetch(`${OCM_BASE_URL}/poi?${query}`);
+
+      if (!response.ok) {
+        console.warn("[OCM] Turkey fetch error, using mock for search");
+        _turkeyStationsCache = MOCK_STATIONS;
+        return MOCK_STATIONS;
+      }
+
+      const data: OCMStation[] = await response.json();
+
+      if (!Array.isArray(data) || data.length === 0) {
+        _turkeyStationsCache = MOCK_STATIONS;
+        return MOCK_STATIONS;
+      }
+
+      const mapped = data.map(mapOCMStation);
+      _turkeyStationsCache = mapped;
+      return mapped;
+    } catch (err) {
+      console.warn("[OCM] Turkey fetch failed, using mock for search:", err);
+      _turkeyStationsCache = MOCK_STATIONS;
+      return MOCK_STATIONS;
+    } finally {
+      _turkeyStationsFetching = null;
+    }
+  })();
+
+  return _turkeyStationsFetching;
+}
+
 export async function fetchNearbyStations(
   params: FetchStationsParams,
 ): Promise<ChargingStation[]> {
